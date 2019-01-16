@@ -155,7 +155,6 @@ class AbstractExperiment(TrixiExperiment):
                      random_state=random_seed)
 
         if random_seed is not None:
-            torch.manual_seed(random_seed)
             np.random.seed(random_seed)
 
         # run folds
@@ -487,6 +486,16 @@ try:
         def __setstate__(self, state):
             vars(self).update(state)
         
+        def kfold(self, num_epochs: int,
+                  data: typing.Union[typing.List[BaseDataManager],
+                                    BaseDataManager],
+                  num_splits=None, shuffle=False, random_seed=None, **kwargs):
+            if random_seed is not None:
+                torch.manual_seed(random_seed)
 
+            super().kfold(num_epochs, data, num_splits, shuffle, random_seed,
+                        **kwargs)
+
+                        
 except ImportError as e:
     raise e
