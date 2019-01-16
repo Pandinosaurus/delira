@@ -94,17 +94,31 @@ class AbstractExperiment(TrixiExperiment):
 
         raise NotImplementedError()
 
-    def kfold(self, num_epochs: int, data: typing.List[BaseDataManager],
+    def kfold(self, num_epochs: int,
+              data: typing.Union[typing.List[BaseDataManager], BaseDataManager],
               num_splits=None, shuffle=False, random_seed=None, **kwargs):
         """
         Runs K-Fold Crossvalidation
+        The two supported scenarios are:
+
+            * passing a list of datamanagers: the list will be splitted and 
+            multiple datamanagers will be combinded into a single one 
+            (if necessary); No subsets will be created from a datamanager but 
+            each train and validation set consists of a integer number of full 
+            datamanagers
+
+            * passing a single datamanager: the data within the single manager 
+            will be splitted and multiple datamanagers will be created holding 
+            the subsets.
 
         Parameters
         ----------
         num_epochs : int
             number of epochs to train the model
-        data : list of BaseDataManager
-            list of datamanagers (will be split for crossvalidation)
+        data : list of :class:`BaseDataManager` or single 
+               :class:`BaseDataManager`
+            list of datamanagers or single datamanger 
+            (will be split for crossvalidation)
         num_splits : None or int
             number of splits for kfold
             if None: len(data) splits will be validated
@@ -118,9 +132,25 @@ class AbstractExperiment(TrixiExperiment):
 
         """
 
+        # set number of splits if not specified
         if num_splits is None:
-            num_splits = len(data)
+            if isinstance(data, BaseDataManager):
+                num_splits = len(data.dataset)
+            elif isinstance(data, list) and (len(data) == 1):
+                num_splits = len(data[0].dataset)
+                data = data[0]
+            else:
+                num_splits = len(data)
+        
+        # extract actual data to be split
+        if isinstance(data, BaseDataManager):
+            split_data = list(range(len(data.dataset)))
+            split_mgr = True
+        else:
+            split_data = data
+            split_mgr = False
 
+        # instantiate the actual kfold
         fold = KFold(n_splits=num_splits, shuffle=shuffle,
                      random_state=random_seed)
 
@@ -128,10 +158,22 @@ class AbstractExperiment(TrixiExperiment):
             torch.manual_seed(random_seed)
             np.random.seed(random_seed)
 
-        for idx, (train_idxs, test_idxs) in enumerate(fold.split(data)):
-            self.run(ConcatDataManager(
-                [data[_idx] for _idx in train_idxs]),
-                ConcatDataManager([data[_idx] for _idx in test_idxs]),
+        # run folds
+        for idx, (train_idxs, test_idxs) in enumerate(fold.split(split_data)):
+            # extract data from single manager
+            if split_mgr:
+                train_data = data.get_subset(train_idxs)
+                test_data = data.get_subset(test_idxs)
+            # combine multiple managers to single manager
+            else:
+                train_data = ConcatDataManager(
+                    [data[_idx] for _idx in train_idxs]
+                )
+                test_data = ConcatDataManager(
+                    [data[_idx] for _idx in test_idxs]
+                )
+
+            self.run(train_data, test_data,
                 num_epochs=num_epochs,
                 fold=idx,
                 **kwargs)
@@ -444,6 +486,7 @@ try:
 
         def __setstate__(self, state):
             vars(self).update(state)
+        
 
 except ImportError as e:
     raise e
