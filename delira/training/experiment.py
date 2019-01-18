@@ -183,6 +183,41 @@ class AbstractExperiment(TrixiExperiment):
                          data: BaseDataManager,
                          num_splits=None, shuffle=False, random_seed=None,
                          label_key="label", **kwargs):
+         """
+        Runs stratified K-Fold Crossvalidation
+        The supported supported scenario is:
+
+            * passing a single datamanager: the data within the single manager
+              will be split and multiple datamanagers will be created holding
+              the subsets.
+
+        .. note:: 
+            In opposite to :method:`AbstractExperiment.kfold` this method does 
+            not support passing multiple managers, since stratification would 
+            be hard to implement
+
+        Parameters
+        ----------
+        num_epochs : int
+            number of epochs to train the model
+        data : :class:`BaseDataManager`
+            list of datamanagers or single datamanger
+            (will be split for crossvalidation)
+        num_splits : None or int
+            number of splits for kfold
+            if None: len(data) splits will be validated
+        shuffle : bool
+            whether or not to shuffle indices for kfold
+        random_seed : None or int
+            random seed used to seed the kfold (if shuffle is true),
+            pytorch and numpy
+        label_key : str (default: "label")
+            the key to extract the label for stratification from each data 
+            sample
+        **kwargs :
+            additional keyword arguments (completely passed to self.run())
+
+        """
 
         if num_splits is None:
             num_splits = 10
@@ -542,6 +577,6 @@ try:
             super().stratified_kfold(num_epochs, data, num_splits, shuffle,
                                      random_seed, label_key, **kwargs)
 
-                                     
+
 except ImportError as e:
     raise e
