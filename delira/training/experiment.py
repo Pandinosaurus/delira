@@ -1,7 +1,7 @@
 
 
 from ..utils import now
-from ..data_loading import BaseDataManager, ConcatDataManager
+from ..data_loading import BaseDataManager, ConcatDataManager, BaseLazyDataset
 from .. import __version__ as delira_version
 from .parameters import Parameters
 from trixi.experiment import Experiment as TrixiExperiment
@@ -14,7 +14,7 @@ import numpy as np
 import pickle
 
 from abc import abstractmethod
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.model_selection import train_test_split
 from datetime import datetime
 from inspect import signature
@@ -101,14 +101,14 @@ class AbstractExperiment(TrixiExperiment):
         Runs K-Fold Crossvalidation
         The two supported scenarios are:
 
-            * passing a list of datamanagers: the list will be splitted and 
+            * passing a list of datamanagers: the list will be split and 
             multiple datamanagers will be combinded into a single one 
             (if necessary); No subsets will be created from a datamanager but 
             each train and validation set consists of a integer number of full 
             datamanagers
 
             * passing a single datamanager: the data within the single manager 
-            will be splitted and multiple datamanagers will be created holding 
+            will be split and multiple datamanagers will be created holding 
             the subsets.
 
         Parameters
@@ -132,13 +132,15 @@ class AbstractExperiment(TrixiExperiment):
 
         """
 
+        if isinstance(data, list) and (len(data) == 1):
+            data = data[0]
+
         # set number of splits if not specified
         if num_splits is None:
             if isinstance(data, BaseDataManager):
-                num_splits = len(data.dataset)
-            elif isinstance(data, list) and (len(data) == 1):
-                num_splits = len(data[0].dataset)
-                data = data[0]
+                num_splits = 10
+                logger.warning("num_splits not defined, using default value of \
+                                10 splits instead")
             else:
                 num_splits = len(data)
         
@@ -176,6 +178,39 @@ class AbstractExperiment(TrixiExperiment):
                 num_epochs=num_epochs,
                 fold=idx,
                 **kwargs)
+
+    def stratified_kfold(self, num_epochs: int,
+                         data: BaseDataManager,
+                         num_splits=None, shuffle=False, random_seed=None,
+                         label_key="label", **kwargs):
+
+        if num_splits is None:
+            num_splits = 10
+            logger.warning("num_splits not defined, using default value of \
+                                10 splits instead ")
+                                
+        if isinstance(data.dataset, BaseLazyDataset):
+            logger.warning("A lazy dataset is given for stratified kfold. \
+                            Iterating over the dataset to extract labels for \
+                            stratification may be a massive overhead")
+
+        split_idxs = list(range(len(data.dataset)))
+        split_labels = [data.dataset[_idx][label_key] for _idx in split_idxs]
+        
+        fold = StratifiedKFold(n_splits=num_splits, shuffle=shuffle,
+                               random_state=random_seed)
+
+        for idx, (train_idxs, test_idxs) in enumerate(fold.split(split_idxs,
+                                                                 split_labels)):
+            # extract data from single manager
+            train_data = data.get_subset(train_idxs)
+            test_data = data.get_subset(test_idxs)
+            
+            self.run(train_data, test_data,
+                     num_epochs=num_epochs,
+                     fold=idx,
+                     **kwargs)
+
 
     def __str__(self):
         """
@@ -496,6 +531,17 @@ try:
             super().kfold(num_epochs, data, num_splits, shuffle, random_seed,
                         **kwargs)
 
-                        
+        def stratified_kfold(self, num_epochs: int,
+                             data: BaseDataManager,
+                             num_splits=None, shuffle=False, random_seed=None,
+                             label_key="label", **kwargs):
+
+            if random_seed is not None:
+                torch.manual_seed(random_seed)
+
+            super().stratified_kfold(num_epochs, data, num_splits, shuffle,
+                                     random_seed, label_key, **kwargs)
+
+                                     
 except ImportError as e:
     raise e
