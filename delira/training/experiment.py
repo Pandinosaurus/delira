@@ -117,7 +117,7 @@ class AbstractExperiment(TrixiExperiment):
             number of epochs to train the model
         data : list of :class:`BaseDataManager` or single 
                :class:`BaseDataManager`
-            list of datamanagers or single datamanger 
+            list of datamanagers or single datamanager 
             (will be split for crossvalidation)
         num_splits : None or int
             number of splits for kfold
@@ -201,7 +201,7 @@ class AbstractExperiment(TrixiExperiment):
         num_epochs : int
             number of epochs to train the model
         data : :class:`BaseDataManager`
-            list of datamanagers or single datamanger
+            single datamanager
             (will be split for crossvalidation)
         num_splits : None or int
             number of splits for kfold
